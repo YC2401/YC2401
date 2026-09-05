@@ -1,4 +1,9 @@
 ## Hi there 👋
+## Hi 我是柯燕纯 👋
+- 🎓 计算机科学与技术专业在校学生
+- 💻 目前正在学习：软件工程
+- 📌 本仓库用于存放课程作业以及个人学习项目
+- 📫 欢迎大家一起交流学习
 
 <!--
 **YC2401/YC2401** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
