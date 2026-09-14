@@ -6,10 +6,12 @@ def parse_argv():
     解析命令行参数
     返回：(原文路径,抄袭版路径,输出路径)
     参数数量不对则提示并退出
+    调用格式：python main.py [原文文件] [抄袭版论文的文件] [答案文件]
     """
     if len(sys.argv) != 4:
-        print("参数错误！用法：python main.py 原文绝对路径 抄袭版绝对路径 输出文件绝对路径")
-        sys.exit(0)
+        print("参数错误！用法：python main.py 原文文件 抄袭版论文的文件 答案文件")
+        print("示例：python main.py C:\\tests\\org.txt C:\\tests\\org_add.txt C:\\tests\\ans.txt")
+        sys.exit(1)   # 参数错误使用非0退出码
     orig_path = sys.argv[1]    # 原文文件路径
     copy_path = sys.argv[2]    # 抄袭版文件路径
     out_path = sys.argv[3]     # 结果输出路径
@@ -75,8 +77,8 @@ def calc_similarity(orig_text: str, copy_text: str, n=2):
     公式：重复率 = 交集片段数量 / 抄袭版总片段数量
     边界：抄袭文本过短返回0.0，避免除零
     """
-    orig_set = ngram_segment(orig_text, n)      # 原文2-gram分词
-    copy_set = ngram_segment(copy_text, n)     # 抄袭版2-gram分词
+    orig_set = ngram_segment(orig_text, n)     # 原文2-gram分词
+    copy_set = ngram_segment(copy_text, n)    # 抄袭版2-gram分词
     # 边界保护，抄袭版没有足够片段直接返回0
     if len(copy_set) == 0:
         return 0.0
@@ -87,7 +89,8 @@ def calc_similarity(orig_text: str, copy_text: str, n=2):
 
 def write_answer(out_path: str, rate: float):
     """
-    将重复率保留小数点后两位写入输出文件
+    将重复率保留小数点后两位写入输出答案文件
+    文件中仅写入结果数字，无多余文字，符合作业输出规范
     """
     output_str = "{:.2f}".format(rate) # 格式化，保留两位小数
     try:
@@ -106,10 +109,10 @@ def main():
     # 文件读取失败直接结束
     if orig_content is None or copy_content is None:
         return
-    orig_clean = preprocess(orig_content)    # 原文预处理清洗
-    copy_clean = preprocess(copy_content)     # 抄袭版预处理清洗
+    orig_clean = preprocess(orig_content)        # 原文预处理清洗
+    copy_clean = preprocess(copy_content)         # 抄袭版预处理清洗
     repeat_rate = calc_similarity(orig_clean, copy_clean) # 计算重复率
-    write_answer(out_path, repeat_rate)      # 写入结果文件
+    write_answer(out_path, repeat_rate)           # 写入结果文件
 
 
 if __name__ == "__main__":
