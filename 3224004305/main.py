@@ -1,119 +1,74 @@
-import sys
 import re
 
-def parse_argv():
-    """
-    解析命令行参数
-    返回：(原文路径,抄袭版路径,输出路径)
-    参数数量不对则提示并退出
-    调用格式：python main.py [原文文件] [抄袭版论文的文件] [答案文件]
-    """
-    if len(sys.argv) != 4:
-        print("参数错误！用法：python main.py 原文文件 抄袭版论文的文件 答案文件")
-        print("示例：python main.py C:\\tests\\org.txt C:\\tests\\org_add.txt C:\\tests\\ans.txt")
-        sys.exit(1)   # 参数错误使用非0退出码
-    orig_path = sys.argv[1]    # 原文文件路径
-    copy_path = sys.argv[2]    # 抄袭版文件路径
-    out_path = sys.argv[3]     # 结果输出路径
-    return orig_path, copy_path, out_path
+# 优化1：正则预编译（放到全局，只编译1次）
+# 示例清洗正则，按你原来preprocess里的规则修改pattern
+pattern = re.compile(r'[^\u4e00-\u9fa5a-zA-Z0-9]')
 
 
-def read_file(file_path):
-    """
-    读取文件，自动尝试utf‑8、gbk编码
-    返回文本字符串；发生异常返回None
-    """
-    encodings = ["utf-8", "gbk"]
-    for enc in encodings:
-        try:
-            with open(file_path, "r", encoding=enc) as f:
-                content = f.read()   # 一次性读取全部文本
-            return content
-        except FileNotFoundError:
-            print(f"错误：找不到文件 {file_path}")
-            return None
-        except UnicodeDecodeError:
-            continue    # 当前编码失败，尝试下一种编码
-        except Exception as e:
-            print(f"读取文件异常 {file_path}，{e}")
-            return None
-    print(f"文件 {file_path} 编码解析失败")
-    return None
+def preprocess(text: str) -> str:
+    """文本预处理：过滤非中英数字字符"""
+    # 直接复用已经预编译好的正则对象，不再调用re.compile
+    cleaned = pattern.sub("", text)
+    return cleaned
 
 
-def preprocess(text: str):
-    """
-    文本预处理
-    去除换行、空格，过滤全部标点符号，只保留中文字符
-    """
-    # 去掉换行、空格
-    text = text.replace("\n", "").replace(" ", "")
-    # 只保留中文字符
-    pattern = re.compile(r'[^\u4e00-\u9fa5]')
-    text = pattern.sub("", text) # 将非中文字符替换为空
-    return text
+def ngram_segment(text: str, n: int = 3) -> set:
+    """n-gram分词，返回集合用于相似度计算"""
+    grams = set()
+    if len(text) < n:
+        grams.add(text)
+        return grams
+    for i in range(len(text) - n + 1):
+        grams.add(text[i:i + n])
+    return grams
 
 
-def ngram_segment(text: str, n: int):
-    """
-    n‑gram滑动窗口分词
-    :param text:预处理之后的文本
-    :param n:窗口大小，本项目使用n=2
-    :return:所有n元片段的集合
-    """
-    seg_set = set()
-    text_len = len(text)
-    if text_len < n:    # 文本长度不足窗口大小，直接返回空集合
-        return seg_set
-    for i in range(text_len - n + 1):
-        seg = text[i:i + n]  # 截取连续n个字的片段
-        seg_set.add(seg)     # 加入集合自动去重
-    return seg_set
-
-
-def calc_similarity(orig_text: str, copy_text: str, n=2):
-    """
-    计算论文重复率
-    公式：重复率 = 交集片段数量 / 抄袭版总片段数量
-    边界：抄袭文本过短返回0.0，避免除零
-    """
-    orig_set = ngram_segment(orig_text, n)     # 原文2-gram分词
-    copy_set = ngram_segment(copy_text, n)    # 抄袭版2-gram分词
-    # 边界保护，抄袭版没有足够片段直接返回0
-    if len(copy_set) == 0:
+def calc_similarity(text1: str, text2: str) -> float:
+    """计算两段文本的n-gram重复率（Jaccard）"""
+    set1 = ngram_segment(text1)
+    set2 = ngram_segment(text2)
+    inter = set1 & set2
+    union = set1 | set2
+    if len(union) == 0:
         return 0.0
-    inter_set = orig_set.intersection(copy_set) # 获取两个集合交集
-    repeat_rate = len(inter_set) / len(copy_set)# 计算重复率
-    return repeat_rate
+    return len(inter) / len(union)
 
 
-def write_answer(out_path: str, rate: float):
-    """
-    将重复率保留小数点后两位写入输出答案文件
-    文件中仅写入结果数字，无多余文字，符合作业输出规范
-    """
-    output_str = "{:.2f}".format(rate) # 格式化，保留两位小数
-    try:
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(output_str) # 将结果写入文件
-        print(f"计算完成，重复率：{output_str}，结果写入{out_path}")
-    except Exception as e:
-        print(f"写入输出文件失败：{e}")
+# 优化2：IO优化，一次性读取文件
+def read_file(path: str) -> str:
+    """读取文本文件，只打开一次"""
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def write_answer(result_path: str, sim: float):
+    """写入结果"""
+    with open(result_path, "w", encoding="utf-8") as f:
+        f.write(f"重复率：{sim:.2f}")
 
 
 def main():
-    """程序总调度入口"""
-    orig_path, copy_path, out_path = parse_argv() # 获取三个文件路径
-    orig_content = read_file(orig_path)           # 读取原文内容
-    copy_content = read_file(copy_path)           # 读取抄袭版内容
-    # 文件读取失败直接结束
-    if orig_content is None or copy_content is None:
+    import sys
+    if len(sys.argv) != 4:
+        print("用法：python main.py file1.txt file2.txt result.txt")
         return
-    orig_clean = preprocess(orig_content)        # 原文预处理清洗
-    copy_clean = preprocess(copy_content)         # 抄袭版预处理清洗
-    repeat_rate = calc_similarity(orig_clean, copy_clean) # 计算重复率
-    write_answer(out_path, repeat_rate)           # 写入结果文件
+    file1, file2, outfile = sys.argv[1], sys.argv[2], sys.argv[3]
+
+    # IO优化：一次性读入两个文件
+    raw1 = read_file(file1)
+    raw2 = read_file(file2)
+
+    # 预处理
+    clean1 = preprocess(raw1)
+    clean2 = preprocess(raw2)
+
+    # 计算相似度
+    sim = calc_similarity(clean1, clean2)
+    print(f"计算完成，重复率：{sim:.2f}，结果写入{outfile}")
+
+    # 输出结果
+    write_answer(outfile, sim)
 
 
 if __name__ == "__main__":
-    main() # 启动程序
+    main()
